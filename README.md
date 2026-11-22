@@ -1,5 +1,7 @@
 # Meridian Terminal
 
+[![CI](https://github.com/jaykk99/meridian-terminal/actions/workflows/ci.yml/badge.svg)](https://github.com/jaykk99/meridian-terminal/actions/workflows/ci.yml)
+
 An AI-native **paper-trading** terminal across crypto, US equities, FX, indices, commodities and ETFs — with an AI signal desk, copy trading, and its own in-app token, **Sum Cool (COOL)**.
 
 > Meridian is a simulation. Prices are synthetic and deterministic, orders never reach a real venue, and nothing here is investment advice. No deposits, withdrawals or real money are involved.
@@ -144,4 +146,4 @@ worker/
 - **Fees:** 0.005% base on entry and exit, discounted automatically by COOL holdings. Copy-trade entries skip the fee.
 - **Leverage:** isolated margin per position with per-class caps; liquidation price is shown on the ticket.
 - **Sum Cool:** claim and trade actions are tracked in `token_claims` and `token_ledger`; one claim per account. COOL is entirely in-app — no blockchain, no transfer, no cash value.
-- **No test suite yet.** `bun run typecheck` and `bun run build` are the checks that run in CI-less development.
+- **No test suite yet.** `bun run typecheck` and `bun run build` are the checks CI runs on every push and pull request.
