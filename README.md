@@ -4,6 +4,16 @@ An AI-native **paper-trading** terminal across crypto, US equities, FX, indices,
 
 > Meridian is a simulation. Prices are synthetic and deterministic, orders never reach a real venue, and nothing here is investment advice. No deposits, withdrawals or real money are involved.
 
+## Screenshots
+
+![Meridian landing page](docs/screenshots/landing.png)
+
+*Landing page — live AI desk scan, 346 markets and $100,000 of paper capital.*
+
+![Sum Cool page](docs/screenshots/sumcool.png)
+
+*Sum Cool — a claimed 500 COOL balance, Silver fee tier and the COOL spot book.*
+
 ## What's inside
 
 - **340+ markets across six asset classes**, each with live simulated quotes, candles at five intervals, 24h stats and per-class leverage limits.
