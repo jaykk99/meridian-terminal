@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 interface Props {
   data: number[];
   width?: number;
@@ -17,6 +19,11 @@ export function Sparkline({
   strokeWidth = 1.5,
   responsive = false,
 }: Props) {
+  // Unique per instance: deriving the id from the data collided whenever two
+  // sparklines shared a first value, length and max, and the second one then
+  // filled with the first one's gradient colour. Called before the early
+  // return so the hook order never changes.
+  const id = useId();
   if (!data || data.length < 2) {
     return <svg width={width} height={height} aria-hidden />;
   }
@@ -26,7 +33,6 @@ export function Sparkline({
   const stepX = width / (data.length - 1);
   const points = data.map((v, i) => [i * stepX, height - 2 - ((v - min) / span) * (height - 4)]);
   const line = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
-  const id = `sp-${Math.round(points[0][1] * 100)}-${data.length}-${Math.round(max * 100)}`;
 
   return (
     <svg

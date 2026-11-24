@@ -43,6 +43,7 @@ const DDL = [
     leverage REAL NOT NULL,
     margin REAL NOT NULL,
     notional REAL NOT NULL,
+    fee REAL NOT NULL DEFAULT 0,
     tp REAL,
     sl REAL,
     status TEXT NOT NULL DEFAULT 'open',
@@ -111,6 +112,12 @@ async function init(env: Env): Promise<void> {
   // Databases created before wallet sign-in need the column added in place.
   try {
     await env.DB.prepare('ALTER TABLE users ADD COLUMN wallet_address TEXT').run();
+  } catch {
+    /* column already exists */
+  }
+  // Positions opened before fee tracking need the column added in place.
+  try {
+    await env.DB.prepare('ALTER TABLE positions ADD COLUMN fee REAL NOT NULL DEFAULT 0').run();
   } catch {
     /* column already exists */
   }

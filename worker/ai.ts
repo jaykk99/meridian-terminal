@@ -47,7 +47,7 @@ function rsi(closes: number[], period = 14): number {
     if (diff >= 0) gains += diff;
     else losses -= diff;
   }
-  if (losses === 0) return 100;
+  if (losses === 0) return gains === 0 ? 50 : 100;
   const rs = gains / losses;
   return 100 - 100 / (1 + rs);
 }

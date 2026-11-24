@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:worker": "wrangler deploy --dry-run --outdir=build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "test": "bun test/verify.ts",
     "preview:worker": "bun run build && wrangler dev --port 3000"
   },
   "dependencies": {

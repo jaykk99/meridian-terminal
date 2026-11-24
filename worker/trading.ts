@@ -17,6 +17,8 @@ export type PositionRow = {
   leverage: number;
   margin: number;
   notional: number;
+  /** Fee paid when the position opened (0 for copy fills). Net PnL subtracts it. */
+  fee: number;
   tp: number | null;
   sl: number | null;
   status: 'open' | 'closed';
@@ -132,6 +134,7 @@ export async function openPosition(
     leverage,
     margin,
     notional,
+    fee,
     tp,
     sl,
     status: 'open',
@@ -151,9 +154,9 @@ export async function openPosition(
       user.id,
     ),
     env.DB.prepare(
-      `INSERT INTO positions (id, user_id, symbol, side, qty, entry_price, leverage, margin, notional,
+      `INSERT INTO positions (id, user_id, symbol, side, qty, entry_price, leverage, margin, notional, fee,
         tp, sl, status, close_price, realized_pnl, source, trader_id, trader_name, close_after, opened_at, closed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 0, ?, ?, ?, ?, ?, NULL)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 0, ?, ?, ?, ?, ?, NULL)`,
     ).bind(
       position.id,
       position.user_id,
@@ -164,6 +167,7 @@ export async function openPosition(
       position.leverage,
       position.margin,
       position.notional,
+      position.fee,
       position.tp,
       position.sl,
       position.source,
@@ -195,27 +199,30 @@ export async function closePosition(
   if (reason === 'tp' && pos.tp != null) exit = pos.tp;
   if (reason === 'sl' && pos.sl != null) exit = pos.sl;
 
-  let pnl = pnlFor(pos, exit);
-  let returned = pos.margin + pnl;
-  if (returned < 0) {
-    pnl = -pos.margin;
-    returned = 0;
-  }
-  const fee = pos.notional * (await feeRateFor(env, userId));
-  returned = Math.max(0, returned - fee);
+  // Net realised PnL is the actual balance change from the trade: the margin
+  // comes back, the open fee was already paid at entry, and the close fee
+  // comes out of the credit. Recording the gross PnL overstated results by
+  // both fees and left the equity curve jumping down to equity at its last
+  // point. If the credit hits zero, the close fee was never actually paid,
+  // so it is not part of the loss.
+  const grossPnl = pnlFor(pos, exit);
+  const openFee = pos.fee ?? 0;
+  const closeFee = pos.notional * (await feeRateFor(env, userId));
+  const credited = round2(Math.max(0, pos.margin + grossPnl - closeFee));
+  const netPnl = round2(credited - pos.margin - openFee);
 
   await env.DB.batch([
     env.DB.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').bind(
-      round2(returned),
+      credited,
       userId,
     ),
     env.DB.prepare(
       `UPDATE positions SET status = 'closed', close_price = ?, realized_pnl = ?, closed_at = ?
        WHERE id = ? AND user_id = ?`,
-    ).bind(round2(exit), round2(pnl), Date.now(), pos.id, userId),
+    ).bind(round2(exit), netPnl, Date.now(), pos.id, userId),
   ]);
 
-  return { pnl: round2(pnl) };
+  return { pnl: netPnl };
 }
 
 /**
@@ -247,7 +254,9 @@ export async function syncPositions(env: Env, userId: string): Promise<void> {
       await closePosition(env, userId, pos.id, 'sl');
       continue;
     }
-    if (pnl <= -pos.margin * 0.995) {
+    // Liquidate at the same 90%-of-margin loss the UI shows as the
+    // liquidation price (liquidationFor uses a 0.9 / leverage move).
+    if (pnl <= -pos.margin * 0.9) {
       await closePosition(env, userId, pos.id, 'liquidation');
     }
   }

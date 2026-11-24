@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { Link, navigate } from '../lib/router';
 import type { Candle, Me, Portfolio, Quote, Signal } from '../lib/types';
-import { feePct, money, pct, price, signClass, timeAgo } from '../lib/format';
+import { affordableMargin, feePct, money, pct, price, signClass, timeAgo } from '../lib/format';
 import { CandleChart } from '../components/CandleChart';
 import { Sparkline } from '../components/Sparkline';
 import { AssetBadge } from '../components/ui';
@@ -453,7 +453,16 @@ export function Trade({
                     <button
                       key={f}
                       onClick={() =>
-                        setMargin(String(Math.max(10, Math.floor(freeCash * f))))
+                        setMargin(
+                          String(
+                            Math.max(
+                              10,
+                              f === 1
+                                ? affordableMargin(freeCash, leverage, feeRate)
+                                : Math.floor(freeCash * f),
+                            ),
+                          ),
+                        )
                       }
                     >
                       {f === 1 ? 'Max' : `${f * 100}%`}

@@ -140,12 +140,15 @@ app.get('/api/market/symbols', (c) => {
 
 app.get('/api/market/quotes', (c) => {
   const requested = c.req.query('symbols');
-  const defs = requested
-    ? requested
-        .split(',')
-        .map((s) => getDef(s.trim()))
-        .filter((d): d is NonNullable<typeof d> => Boolean(d))
-    : listSymbols();
+  const defs = (
+    requested
+      ? requested
+          .split(',')
+          .map((s) => getDef(s.trim()))
+          .filter((d): d is NonNullable<typeof d> => Boolean(d))
+      : listSymbols()
+  ).slice(0, 400); // the universe is 346 markets; cap explicit lists so one
+  // request cannot ask for thousands of sparkline quotes at once
   const spark = c.req.query('spark') !== '0';
   return json(c, {
     at: Date.now(),

@@ -75,6 +75,18 @@ export function feePct(rate: number): string {
   return `${value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}%`;
 }
 
+/**
+ * Largest margin that fits in free cash once the open fee is included.
+ * The "Max" quick button used to offer the whole balance, which the order
+ * form then rejected because margin + fee exceeded free cash.
+ */
+export function affordableMargin(freeCash: number, leverage: number, feeRate: number): number {
+  if (!Number.isFinite(freeCash) || freeCash <= 0) return 0;
+  const rate = Number.isFinite(feeRate) && feeRate > 0 ? feeRate : 0;
+  const lev = Number.isFinite(leverage) && leverage > 0 ? leverage : 1;
+  return Math.max(0, Math.floor(freeCash / (1 + lev * rate)));
+}
+
 export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }

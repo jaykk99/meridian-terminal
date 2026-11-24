@@ -495,7 +495,6 @@ export async function mirrorPosition(
     },
   );
   if (result.error) return result.error.includes('cash') ? 'insufficient' : 'skipped';
-  void def;
   return 'filled';
 }
 
