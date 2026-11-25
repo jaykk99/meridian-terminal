@@ -16,6 +16,7 @@ export type PositionRow = {
   entry_price: number;
   leverage: number;
   margin: number;
+  open_fee: number;
   notional: number;
   tp: number | null;
   sl: number | null;
@@ -131,6 +132,7 @@ export async function openPosition(
     entry_price: price,
     leverage,
     margin,
+    open_fee: fee,
     notional,
     tp,
     sl,
@@ -152,8 +154,8 @@ export async function openPosition(
     ),
     env.DB.prepare(
       `INSERT INTO positions (id, user_id, symbol, side, qty, entry_price, leverage, margin, notional,
-        tp, sl, status, close_price, realized_pnl, source, trader_id, trader_name, close_after, opened_at, closed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 0, ?, ?, ?, ?, ?, NULL)`,
+        tp, sl, status, close_price, realized_pnl, source, trader_id, trader_name, close_after, opened_at, closed_at, open_fee)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 0, ?, ?, ?, ?, ?, NULL, ?)`,
     ).bind(
       position.id,
       position.user_id,
@@ -171,6 +173,7 @@ export async function openPosition(
       position.trader_name,
       position.close_after,
       position.opened_at,
+      position.open_fee,
     ),
   ]);
 
@@ -202,7 +205,11 @@ export async function closePosition(
     returned = 0;
   }
   const fee = pos.notional * (await feeRateFor(env, userId));
-  returned = Math.max(0, returned - fee);
+  // The fee actually taken (capped at what is left to return), so the stored
+  // realised PnL nets every fee the trade paid: open fee + close fee.
+  const feeCharged = Math.min(fee, returned);
+  returned = returned - feeCharged;
+  const realized = pnl - (pos.open_fee ?? 0) - feeCharged;
 
   await env.DB.batch([
     env.DB.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').bind(
@@ -212,10 +219,10 @@ export async function closePosition(
     env.DB.prepare(
       `UPDATE positions SET status = 'closed', close_price = ?, realized_pnl = ?, closed_at = ?
        WHERE id = ? AND user_id = ?`,
-    ).bind(round2(exit), round2(pnl), Date.now(), pos.id, userId),
+    ).bind(round2(exit), round2(realized), Date.now(), pos.id, userId),
   ]);
 
-  return { pnl: round2(pnl) };
+  return { pnl: round2(realized) };
 }
 
 /**
@@ -247,7 +254,9 @@ export async function syncPositions(env: Env, userId: string): Promise<void> {
       await closePosition(env, userId, pos.id, 'sl');
       continue;
     }
-    if (pnl <= -pos.margin * 0.995) {
+    // Liquidate at 90% of margin lost — the same line liquidationFor() shows
+    // the user as their liquidation price (0.9 / leverage move against them).
+    if (pnl <= -pos.margin * 0.9) {
       await closePosition(env, userId, pos.id, 'liquidation');
     }
   }

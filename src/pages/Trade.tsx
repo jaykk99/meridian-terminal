@@ -453,7 +453,15 @@ export function Trade({
                     <button
                       key={f}
                       onClick={() =>
-                        setMargin(String(Math.max(10, Math.floor(freeCash * f))))
+                        // Size so margin + fee fits inside f of free cash.
+                        setMargin(
+                          String(
+                            Math.max(
+                              10,
+                              Math.floor((freeCash * f) / (1 + feeRate * leverage)),
+                            ),
+                          ),
+                        )
                       }
                     >
                       {f === 1 ? 'Max' : `${f * 100}%`}
