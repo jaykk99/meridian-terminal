@@ -17,6 +17,9 @@ export type PositionRow = {
   leverage: number;
   margin: number;
   open_fee: number;
+  /** Effective fee rate locked in at open (0 for fee-free copy trades and the
+   *  fee-free COOL tier). Null on rows opened before this column existed. */
+  fee_rate: number | null;
   notional: number;
   tp: number | null;
   sl: number | null;
@@ -133,6 +136,7 @@ export async function openPosition(
     leverage,
     margin,
     open_fee: fee,
+    fee_rate: rate,
     notional,
     tp,
     sl,
@@ -154,8 +158,8 @@ export async function openPosition(
     ),
     env.DB.prepare(
       `INSERT INTO positions (id, user_id, symbol, side, qty, entry_price, leverage, margin, notional,
-        tp, sl, status, close_price, realized_pnl, source, trader_id, trader_name, close_after, opened_at, closed_at, open_fee)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 0, ?, ?, ?, ?, ?, NULL, ?)`,
+        tp, sl, status, close_price, realized_pnl, source, trader_id, trader_name, close_after, opened_at, closed_at, open_fee, fee_rate)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 0, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     ).bind(
       position.id,
       position.user_id,
@@ -174,6 +178,7 @@ export async function openPosition(
       position.close_after,
       position.opened_at,
       position.open_fee,
+      position.fee_rate,
     ),
   ]);
 
@@ -204,7 +209,11 @@ export async function closePosition(
     pnl = -pos.margin;
     returned = 0;
   }
-  const fee = pos.notional * (await feeRateFor(env, userId));
+  // The exit fee uses the rate locked in when the position opened, so a
+  // trade opened fee-free (copy trade, or fee-free COOL tier) stays fee-free
+  // at exit, and a tier change mid-trade applies to the next trade, not this
+  // one. Rows opened before fee_rate existed fall back to the current rate.
+  const fee = pos.notional * (pos.fee_rate ?? (await feeRateFor(env, userId)));
   // The fee actually taken (capped at what is left to return), so the stored
   // realised PnL nets every fee the trade paid: open fee + close fee.
   const feeCharged = Math.min(fee, returned);

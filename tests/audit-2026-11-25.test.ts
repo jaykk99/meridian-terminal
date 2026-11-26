@@ -79,7 +79,8 @@ class FakeStmt {
       keys.forEach((k, i) => { row[k] = binds[i]; });
       row.status = 'open'; row.close_price = null; row.realized_pnl = 0; row.closed_at = null;
       // open_fee is bound after close_after in the fixed INSERT; detect by arity.
-      if (binds.length === 17) row.open_fee = binds[16];
+      if (binds.length === 18) { row.open_fee = binds[16]; row.fee_rate = binds[17]; }
+      else if (binds.length === 17) row.open_fee = binds[16];
       else row.open_fee = 0;
       void cols;
       rows.push(row);
@@ -232,6 +233,54 @@ function check(name: string, cond: boolean, detail = '') {
     'trade ticket: fee-aware Max margin passes the fee check',
     newOk,
     `margin=${newMax} fee=${(newMax * leverage * feeRate).toFixed(2)}`,
+  );
+}
+
+// ------------------------------------------- 4. copy trades stay fee-free
+// mirrorPosition/startCopy open copy trades with fee: 0, so the exit fee must
+// be $0 too. Repro: open a copy trade (fee 0), close it at once; the only
+// legitimate loss is a few cents of price drift, not a $0.25 close fee.
+{
+  await ensureSchema(env);
+  const user = makeUser(100_000);
+  db.tables.positions = [];
+  const startBalance = user.balance;
+  const opened = await openPosition(
+    env,
+    user,
+    { symbol: 'BTCUSD', side: 'long', margin: 1000, leverage: 5 },
+    { source: 'copy', traderId: 'kaia-vance', traderName: 'Kaia Vance', fee: 0 },
+  );
+  check('copy open: position created with zero open fee', Boolean(opened.position) && opened.position!.open_fee === 0, opened.error ?? '');
+  const pos = opened.position!;
+  const closed = await closePosition(env, 'u_test', pos.id, 'manual');
+  const stored = (await db.prepare('SELECT * FROM positions WHERE id = ? AND user_id = ?').bind(pos.id, 'u_test').first<PositionRow>())!;
+  const afterClose = (await db.prepare('SELECT * FROM users WHERE id = ?').bind('u_test').first<UserRow>())!;
+  const balanceChange = afterClose.balance - startBalance;
+  // notional 5000 * 0.005% = $0.25 close fee on the old code; a fee-free copy
+  // trade closed at once should be within a few cents of break-even.
+  check(
+    'copy close: no close fee on a fee-free copy trade',
+    Math.abs(stored.realized_pnl) < 0.05,
+    `realised_pnl=${stored.realized_pnl} (old code charges -$${(5000 * BASE_FEE_RATE).toFixed(2)} close fee)`,
+  );
+  check(
+    'copy close: balance change matches stored realised PnL',
+    Math.abs(balanceChange - stored.realized_pnl) < 0.011,
+    `balanceChange=${balanceChange.toFixed(2)} realised_pnl=${stored.realized_pnl}`,
+  );
+  void closed;
+}
+
+// ------------------------------------------- 5. candles limit robustness
+{
+  const def = getDef('BTCUSD')!;
+  const { candlesFor } = await import('../worker/market');
+  const bad = candlesFor(def, '1h', NaN);
+  check(
+    'candles: NaN limit falls back to the default instead of returning []',
+    bad.length === 180,
+    `got ${bad.length} candles`,
   );
 }
 

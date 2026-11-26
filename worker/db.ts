@@ -43,6 +43,7 @@ const DDL = [
     leverage REAL NOT NULL,
     margin REAL NOT NULL,
     open_fee REAL NOT NULL DEFAULT 0,
+    fee_rate REAL,
     notional REAL NOT NULL,
     tp REAL,
     sl REAL,
@@ -120,6 +121,15 @@ async function init(env: Env): Promise<void> {
     await env.DB.prepare(
       'ALTER TABLE positions ADD COLUMN open_fee REAL NOT NULL DEFAULT 0',
     ).run();
+  } catch {
+    /* column already exists */
+  }
+  // Databases created before fee-rate tracking need the column added in
+  // place. Nullable on purpose: legacy rows keep NULL so closePosition falls
+  // back to the user's current fee rate instead of reading a 0 default as
+  // "this trade was fee-free".
+  try {
+    await env.DB.prepare('ALTER TABLE positions ADD COLUMN fee_rate REAL').run();
   } catch {
     /* column already exists */
   }

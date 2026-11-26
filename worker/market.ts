@@ -585,7 +585,7 @@ export function candlesFor(
   now = Date.now(),
 ): Candle[] {
   const step = INTERVALS[interval] ?? MIN * 60;
-  const n = Math.max(2, Math.min(500, limit));
+  const n = Math.max(2, Math.min(500, Number.isFinite(limit) ? limit : 180));
   const out: Candle[] = [];
   const current = Math.floor(now / step) * step;
   const samples = 6;
